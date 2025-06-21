@@ -5,10 +5,12 @@ const cors = require('cors')
 const http = require('http');
 
 const app = express();
+app.use(cors({ credentials: true}));
 const server = http.createServer(app);
 const io = require('socket.io')(server, {
     cors: {
-        origin: process.env.FRONT_PORT || 'http://localhost:5173'
+        origin: process.env.FRONT_PORT || 'http://localhost:5173',
+          credentials: true
     }
 })
 //Connect DB
@@ -23,7 +25,7 @@ const Notification = require('./model/notification')
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cors());
+
 //LocalHost Port
 const port = process.env.PORT || 8000;
 //Socket.io
