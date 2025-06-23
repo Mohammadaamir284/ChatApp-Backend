@@ -5,12 +5,15 @@ const cors = require('cors')
 const http = require('http');
 
 const app = express();
-app.use(cors({ credentials: true}));
+app.use(cors({
+     origin: process.env.FRONT_PORT || 'http://localhost:5173',
+    credentials: true
+}));
 const server = http.createServer(app);
 const io = require('socket.io')(server, {
     cors: {
         origin: process.env.FRONT_PORT || 'http://localhost:5173',
-          credentials: true
+        credentials: true
     }
 })
 //Connect DB
