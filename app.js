@@ -26,8 +26,8 @@ const Notification = require('./model/notification')
 
 //use Express
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false , limit: '10mb' }));
 
 //LocalHost Port
 const port = process.env.PORT || 8000;
@@ -48,10 +48,7 @@ io.on('connection', socket => {
         const receiver = Users.find(user => user.UserId === receiverId)
         const sender = Users.find(user => user.UserId === senderId)
         const socketUser = await User.findById(senderId)
-        console.log('sender ', sender);
-        console.log('All connected Users:', Users);
-        console.log('Looking for senderId:', senderId);
-
+       
         const data = {
             conversationId,
             senderId,
@@ -96,7 +93,7 @@ io.on('connection', socket => {
 //app Use
 app.post('/api/register', async (req, res, next) => {
     try {
-        const { fullname, email, password } = req.body;
+        const { fullname, email, password, pic } = req.body;
         if (!fullname || !email || !password) {
             console.log("Request Body:", req.body);
             return res.status(400).json({ message: 'Please Fill All Required Fields' })
@@ -105,12 +102,12 @@ app.post('/api/register', async (req, res, next) => {
             if (isAlreadyExist) {
                 return res.status(400).json({ message: 'User Already Exists' })
             }
-            const newUser = new User({ fullname, email })
+            const newUser = new User({ fullname, email , pic})
             bcryptjs.hash(password, 10, async (err, hashedPassword) => {
                 newUser.set('password', hashedPassword);
                 await newUser.save();
 
-                res.status(200).json({ message: 'User Registered Successfully' })
+                res.status(200).json({ message: 'User Registered Successfully', newUser})
             });
 
         }
@@ -125,8 +122,8 @@ app.get('/', (req, res) => {
 
 app.post('/api/login', async (req, res, next) => {
     try {
-        const { email, password } = req.body;
-        if (!email || !password) {
+        const { email, password} = req.body;
+        if (!email || !password ) {
             console.log("Request Body:", req.body);
             return res.status(400).json({ message: 'Please Fill All Required Fields' })
         } else {
@@ -152,6 +149,7 @@ app.post('/api/login', async (req, res, next) => {
                             user: {
                                 email: user.email,
                                 fullname: user.fullname,
+                                pic: user.pic,
                                 userId: user._id
                             },
                             token: token
@@ -160,6 +158,32 @@ app.post('/api/login', async (req, res, next) => {
                 }
             }
         }
+    } catch (error) {
+        res.status(500).json({ message: 'Server Error', error: error.message });
+    }
+});
+
+app.put('/api/update-pic/:userId', async (req, res) => {
+    try {
+        const { userId, pic } = req.body;
+
+        if (!userId || !pic) {
+            return res.status(400).json({ message: 'User ID and new picture are required' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        user.pic = pic;
+        await user.save();
+
+        res.status(200).json({
+            message: 'Profile picture updated successfully',
+            pic: user.pic
+        });
+
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });
     }
@@ -201,7 +225,7 @@ app.get('/api/conversation/:userId', async (req, res) => {
                 if (!user2) {
                     return null; // Skip this entry
                 }
-                return { user2: { receiverId: user2._id, email: user2.email, fullname: user2.fullname }, conversationId: conversation._id, isUnread: conversation.unreadBy.includes(userId) }
+                return { user2: { receiverId: user2._id, email: user2.email, fullname: user2.fullname, pic: user2.pic }, conversationId: conversation._id, isUnread: conversation.unreadBy.includes(userId) }
             })
         );
         const cleanConversationData = conversationUserData.filter(Boolean);
@@ -334,7 +358,7 @@ app.get('/api/user/:userId', async (req, res) => {
         const user = await User.find({ _id: { $ne: userId } })
         const userdata = await Promise.all(
             user.map(async (user) => {
-                return { user: { email: user.email, fullname: user.fullname, receiverId: user._id } }
+                return { user: { email: user.email, fullname: user.fullname, receiverId: user._id, pic: user.pic } }
             })
         )
         res.status(200).json({ message: `All User`, userdata })
