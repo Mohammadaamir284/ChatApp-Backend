@@ -6,7 +6,7 @@ const http = require('http');
 
 const app = express();
 app.use(cors({
-     origin: process.env.FRONT_PORT || 'http://localhost:5173',
+    origin: process.env.FRONT_PORT || 'http://localhost:5173',
     credentials: true
 }));
 const server = http.createServer(app);
@@ -27,14 +27,13 @@ const Notification = require('./model/notification')
 //use Express
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: false , limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
 //LocalHost Port
 const port = process.env.PORT || 8000;
 //Socket.io
 let Users = []
 io.on('connection', socket => {
-    console.log('UserId Socket', socket.id);
     socket.on('addUser', UserId => {
         const isUserExist = Users.find(user => user.UserId === UserId)
         if (!isUserExist) {
@@ -48,7 +47,7 @@ io.on('connection', socket => {
         const receiver = Users.find(user => user.UserId === receiverId)
         const sender = Users.find(user => user.UserId === senderId)
         const socketUser = await User.findById(senderId)
-       
+
         const data = {
             conversationId,
             senderId,
@@ -69,7 +68,6 @@ io.on('connection', socket => {
                 conversationId: conversationId,
                 isRead: false
             });
-            console.log('📩 Receiver offline. Notification saved.');
         } else {
             io.to(receiver.socketId).emit('getMessage', data);
         }
@@ -89,27 +87,24 @@ io.on('connection', socket => {
         io.emit('getUser', Users)
     })
 })
-
 //app Use
 app.post('/api/register', async (req, res, next) => {
     try {
         const { fullname, email, password, pic } = req.body;
         if (!fullname || !email || !password) {
-            console.log("Request Body:", req.body);
             return res.status(400).json({ message: 'Please Fill All Required Fields' })
         } else {
             const isAlreadyExist = await User.findOne({ email })
             if (isAlreadyExist) {
                 return res.status(400).json({ message: 'User Already Exists' })
             }
-            const newUser = new User({ fullname, email , pic})
+            const newUser = new User({ fullname, email, pic })
             bcryptjs.hash(password, 10, async (err, hashedPassword) => {
                 newUser.set('password', hashedPassword);
                 await newUser.save();
 
-                res.status(200).json({ message: 'User Registered Successfully', newUser})
+                res.status(200).json({ message: 'User Registered Successfully', newUser })
             });
-
         }
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });
@@ -122,9 +117,8 @@ app.get('/', (req, res) => {
 
 app.post('/api/login', async (req, res, next) => {
     try {
-        const { email, password} = req.body;
-        if (!email || !password ) {
-            console.log("Request Body:", req.body);
+        const { email, password } = req.body;
+        if (!email || !password) {
             return res.status(400).json({ message: 'Please Fill All Required Fields' })
         } else {
             const user = await User.findOne({ email })
@@ -141,9 +135,7 @@ app.post('/api/login', async (req, res, next) => {
                         if (err) {
                             return res.status(500).json({ message: 'Token generation failed', error: err });
                         }
-
                         await user.updateOne({ _id: user._id }, { $set: { token } });
-
                         res.status(200).json({
                             message: `Welcome Back ${user.fullname}`,
                             user: {
@@ -166,24 +158,19 @@ app.post('/api/login', async (req, res, next) => {
 app.put('/api/update-pic/:userId', async (req, res) => {
     try {
         const { userId, pic } = req.body;
-
         if (!userId || !pic) {
             return res.status(400).json({ message: 'User ID and new picture are required' });
         }
-
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-
         user.pic = pic;
         await user.save();
-
         res.status(200).json({
             message: 'Profile picture updated successfully',
             pic: user.pic
         });
-
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });
     }
@@ -192,22 +179,17 @@ app.put('/api/update-pic/:userId', async (req, res) => {
 app.post('/api/conversation', async (req, res) => {
     try {
         const { senderId, receiverId } = req.body;
-
         if (!senderId || !receiverId) {
             return res.status(400).json({ message: "Both senderId and receiverId are required." });
         }
-
         let conversation = await Conversation.findOne({
             members: { $all: [senderId, receiverId], $size: 2 }
         });
-
         if (!conversation) {
             conversation = new Conversation({ members: [senderId, receiverId] });
             await conversation.save();
         }
-
         res.status(200).json({ message: "Conversation ready", conversationId: conversation._id });
-
     } catch (error) {
         res.status(500).json({ message: 'Conversation POST Error', error: error.message });
     }
@@ -229,40 +211,32 @@ app.get('/api/conversation/:userId', async (req, res) => {
             })
         );
         const cleanConversationData = conversationUserData.filter(Boolean);
-
         res.status(200).json({ message: `Welcome sir`, cleanConversationData })
     } catch (error) {
         res.status(500).json({ message: 'Conversation Get Error', error: error.message });
     }
-
 })
 
 app.post('/api/message', async (req, res) => {
     try {
         const { conversationId, senderId, messages, receiverId = '' } = req.body;
-
         if (!messages) {
             return res.status(400).json({ message: "Message cannot be empty" });
         }
-
         let convId;
-
         // 🔹 NEW conversation
         if ((!conversationId || conversationId === 'new') && receiverId) {
             let existingConversation = await Conversation.findOne({
                 members: { $all: [senderId, receiverId], $size: 2 }
             });
-
             if (existingConversation) {
                 convId = existingConversation._id;
-
                 // 🔄 Remove senderId from deletedBy if exists (restore visibility)
                 if (existingConversation.deletedBy?.includes(senderId)) {
                     await Conversation.findByIdAndUpdate(convId, {
                         $pull: { deletedBy: senderId }
                     });
                 }
-
                 await Conversation.findByIdAndUpdate(convId, {
                     $addToSet: { unreadBy: receiverId },
                     $set: { lastMessageAt: new Date() }
@@ -275,53 +249,59 @@ app.post('/api/message', async (req, res) => {
                 await newConversation.save();
                 convId = newConversation._id;
             }
-
             const newChatmessage = new Message({
                 conversationId: convId,
                 senderId,
                 messages
             });
             await newChatmessage.save();
-
             return res.status(200).json({
                 message: `Message sent successfully`,
                 conversationId: convId
             });
         }
-
-
         // 🔹 EXISTING conversation
         const chatmessage = new Message({ conversationId, senderId, messages });
         await chatmessage.save();
-
         await Conversation.findByIdAndUpdate(conversationId, {
             $set: { lastMessageAt: new Date() }
         });
-
         return res.status(200).json({ message: `Message sent`, conversationId });
-
     } catch (error) {
         console.error("Message Post Error:", error.message);
         return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 });
-
-
-
 app.get('/api/message/:conversationId', async (req, res) => {
     try {
-        const checkmessage = async (conversationId) => {
-            const messagedata = await Message.find({ conversationId });
-            const messageusersdata = await Promise.all(
-                messagedata.map(async (message) => {
-                    const user = await User.findById(message.senderId);
-                    if (!user) return null;
-                    return {
-                        user: { id: user._id, email: user.email, fullname: user.fullname },
-                        messages: message.messages
-                    };
-                })
-            );
+        const getCleanMessages = async (conversationId) => {
+            const messagedata = await Message.find({ conversationId })
+         
+            const senderIds = [...new Set(messagedata.map(m => m.senderId.toString()))];
+
+            // Bulk fetch users
+            const users = await User.find({ _id: { $in: senderIds } });
+
+            // Map userId -> userData
+            const userMap = {};
+            users.forEach(user => {
+                userMap[user._id.toString()] = {
+                    id: user._id,
+                    email: user.email,
+                    fullname: user.fullname
+                };
+            });
+
+            // Clean message format
+            const messageusersdata = messagedata.map(message => {
+                const user = userMap[message.senderId.toString()];
+                if (!user) return null;
+                return {
+                    user,
+                    messages: message.messages
+                };
+            });
+
             return messageusersdata.filter(Boolean);
         };
 
@@ -332,24 +312,21 @@ app.get('/api/message/:conversationId', async (req, res) => {
             const checkConversation = await Conversation.find({
                 members: { $all: [senderId, receiverId] }
             });
-            console.log('checkConversation ', checkConversation);
 
             if (checkConversation.length > 0) {
-                const messages = await checkmessage(checkConversation[0]._id);
+                const messages = await getCleanMessages(checkConversation[0]._id);
                 return res.status(200).json({ message: "Messages Data", cleanConversationData: messages });
             } else {
                 return res.status(200).json([]);
             }
         } else {
-            const messages = await checkmessage(conversationId);
+            const messages = await getCleanMessages(conversationId);
             return res.status(200).json({ message: "Messages Data", cleanConversationData: messages });
         }
-
     } catch (error) {
         res.status(500).json({ message: 'Message Get Error', error: error.message });
     }
 });
-
 
 //only user 
 app.get('/api/user/:userId', async (req, res) => {
@@ -365,7 +342,6 @@ app.get('/api/user/:userId', async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: 'User Post Error ', error: error.message });
     }
-
 })
 
 app.get('/api/notifications/:userId', async (req, res) => {
@@ -374,7 +350,6 @@ app.get('/api/notifications/:userId', async (req, res) => {
         const notifications = await Notification.find({ receiverId: userId, isRead: false })
             .sort({ createdAt: -1 })
             .populate('senderId', 'fullname email');
-
         res.status(200).json({ message: "Unread Notifications", notifications });
     } catch (error) {
         res.status(500).json({ message: "Error fetching notifications", error: error.message });
@@ -393,37 +368,29 @@ app.put('/api/notifications/read/:userId', async (req, res) => {
 
 app.delete('/api/conversation/:conversationId/:userId', async (req, res) => {
     const { conversationId, userId } = req.params;
-
     try {
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) {
             return res.status(404).json({ message: "Conversation not found" });
         }
-
         // If already deleted by this user
         if (conversation.deletedBy.includes(userId)) {
             return res.status(400).json({ message: "Already deleted by this user" });
         }
-
         // Add user to deletedBy array
         conversation.deletedBy.push(userId);
         await conversation.save();
-
         // 🔥 Check if both users have deleted
         if (conversation.deletedBy.length === 2) {
             await Message.deleteMany({ conversationId }); // delete all messages
             await Conversation.findByIdAndDelete(conversationId); // delete conversation
-
             return res.status(200).json({ message: "Conversation deleted for both users and removed permanently." });
         }
-
         res.status(200).json({ message: "Conversation hidden for this user." });
     } catch (error) {
         res.status(500).json({ message: "Error deleting conversation", error: error.message });
     }
 });
-
-
 
 server.listen(port, () => {
     console.log("Listen on Port " + port);
